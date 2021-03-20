@@ -18,6 +18,7 @@ import os
 from datetime import date
 import tkinter.messagebox as tkmb
 import webbrowser
+import re
 
 UdemyColorDict = {"red": "#ec5252", "pearl": "#edece6", "yellow": "#f5c252",
                   "blue": "#69c1d0", "dark purple": "430d31", "purple": "#6e1952",
@@ -121,7 +122,7 @@ class MainWin(tk.Tk):
         print("searching results for: ", level, subcategory, self.E.get())
 
         self.cur.execute(f'''SELECT {self.TB}.id, {self.TB}.title, {self.TB_LEVEL}.level, {self.TB}.price, 
-                         {self.TB}.rating, {self.TB}.num_subscribers, {self.TB}.num_reviews, {self.TB}.last_update_date, {self.TB}.contents, {self.TB}.url   
+                         {self.TB}.rating, {self.TB}.num_subscribers, {self.TB}.num_reviews, {self.TB}.last_update_date, {self.TB}.contents, {self.TB}.created, {self.TB}.url   
                          FROM {self.TB} JOIN {self.TB_LEVEL} 
                          ON {self.TB}.level_id = {self.TB_LEVEL}.id 
                          JOIN {self.TB_SCAT} 
@@ -130,6 +131,22 @@ class MainWin(tk.Tk):
                          AND {self.TB_SCAT}.subcategory = ?
                          AND {self.TB}.title LIKE ?''', (level, subcategory, search))
         results = self.cur.fetchall()
+        
+        for i in range(len(results)) :
+            # if last_update_date not available, replace with creation date
+            if results[i][7] == None :
+                r7 = '-'.join(*re.findall('^(\d{4,})-(\d{2})-(\d{2})',results[i][9]))
+                rlist = list(results[i])
+                rlist[7] = r7
+                results[i] = tuple(rlist)   
+            # if contents in mins, convert to hours
+            if results[i][-3].split(' ')[1] == 'mins' :
+                num = int(results[i][-3].split(' ') [0])
+                rm3 = f'{num/60:.2f} hours'
+                rlist = list(results[i])
+                rlist[-3] = rm3
+                results[i] = tuple(rlist)
+                
         if not results:
             tkmb.showerror(title="NOT SO LUCKY", message="NOT SO LUCKY.\nTry other combination." )
         else:
@@ -162,9 +179,9 @@ class Treeview(tk.Toplevel):
         vsb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
         vsb.grid(sticky='ns', row=0, column=1)
         self.tree.configure(yscrollcommand=vsb.set)
-        hsb = ttk.Scrollbar(self, orient="horizontal", command=self.tree.xview)
-        hsb.grid(sticky='ns', row=1, column=0)
-        self.tree.configure(xscrollcommand=hsb.set)
+        #hsb = ttk.Scrollbar(self, orient="horizontal", command=self.tree.xview)
+        #hsb.grid(sticky='ns', row=1, column=0)
+        #self.tree.configure(xscrollcommand=hsb.set)
 
         # define columns
         self.tree["columns"] = (
@@ -180,9 +197,12 @@ class Treeview(tk.Toplevel):
         # add Data
         i = 0
         for course in self.lst:
-            self.tree.insert('', tk.END, values=course[:-1], iid=i)
+            self.tree.insert('', tk.END, values=(*course[:3], f'$ {course[3]}', f'{course[4]:.2f}', *course[5:-2] ), iid=i)
             i += 1
-
+            
+        # add label to show total number of courses
+        tk.Label(self, text=f'{len(self.lst)} courses found!').grid(row=1, padx=10,sticky='w')
+        
         # add buttons to show web or save to file
         self.button = tk.Button(self, text="SELECT", command=self.selection, fg=UdemyColorDict["mombasa"])
         self.button.grid()
@@ -214,7 +234,7 @@ class Treeview(tk.Toplevel):
                 save = tkmb.askquestion(parent=self, title="Save it for a rainy day",
                                        message="How about SAVE to FILE and learn later? ")
                 if save=="yes":
-                    askSaveFile = tk.filedialog.asksaveasfile(parent=self, title="save your favorite courses to file",
+                    askSaveFile = tk.filedialog.asksaveasfile(parent=self, mode='a', title="save your favorite courses to file",
                                                           defaultextension='.txt', initialfile="UdemyWishlist",
                                                           initialdir=os.getcwd())
                     if askSaveFile:
@@ -233,8 +253,11 @@ class Treeview(tk.Toplevel):
         """enable the sorting functionality """
         l = [(self.tree.set(k, col), k) for k in self.tree.get_children('')]
         try:
-            l.sort(key=lambda t: float(t[0].split(' ')[0]), reverse=reverse)
-        except ValueError:
+            #l.sort(key=lambda t: float(t[0].split(' ')[0]), reverse=reverse)
+            if re.findall('^(\d{4,})-(\d{2})-(\d{2})$',l[0][0]) :
+                raise IndexError
+            l.sort(key=lambda t: float(re.findall('(\d+(?:\.\d+)?)', t[0])[0]), reverse=reverse)
+        except IndexError:
             l.sort(reverse=reverse)
         # rearrange items in sorted positions
         for index, (val, k) in enumerate(l):

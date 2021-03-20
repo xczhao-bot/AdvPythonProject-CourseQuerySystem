@@ -138,11 +138,12 @@ def getLevelData():
             else:
                 result_df = pd.concat([result_df, df])
     # print("total time to generate level data: ", time.time() - start)
-    return result_df
+    return result_df.sort_values('All Levels', ascending=False)
 
 
 def plotLevelChart():
     result_df = getLevelData()
+    print(result_df)
     plot = result_df.plot(kind="bar", x="language", color=list(UdemyColorDict.values()))
     # fig = plot.get_figure()
     plt.title("Language and Levels", fontweight='bold')
@@ -157,4 +158,4 @@ def plotLevelChart():
 # plot2
 # plotCategoryChart()
 # plot3
-# plotLevelChart()
+#plotLevelChart()
